@@ -166,7 +166,7 @@ function home() {
     const btns = next.mods.map(MOD).filter(Boolean).slice(0, 5).map(m => m.ready
       ? `<a class="btn ${next.mods.length === 1 ? 'pri' : ''}" href="#/m/${m.n}">Module ${m.n}</a>`
       : `<span class="chip">Module ${m.n} : ${m.avail <= t ? 'en préparation' : 'disponible le ' + dshort(m.avail)}</span>`).join('');
-    const extra = next.kind === 'mixte' ? '<a class="btn pri" href="#/casus/rand">Casus au hasard</a>' : next.kind === 'exam' ? '<a class="btn pri" href="#/exam">Examen blanc</a>' : '';
+    const extra = next.kind === 'mixte' ? '<a class="btn pri" href="#/casus/rand">Casus au hasard</a>' : next.kind === 'exam' ? `<a class="btn pri" href="#/exam">Simulation d'examen</a>` : '';
     const done = !!S.days[next.date];
     todayHtml = `<section class="card today ${done ? 'done' : ''}">
       <div class="kick">${e ? "Aujourd'hui" : 'Prochaine étape'} · ${dlong(next.date)}</div>
@@ -447,7 +447,7 @@ function train() {
       <a class="card tile" href="#/exam"><div class="tn">${icon('clock')}</div><div class="tl">Examen blanc</div><div class="mut sm">QCM, définitions et casus en temps limité</div></a>
       <a class="card tile" href="#/cards/all"><div class="tn">${allCards().length}</div><div class="tl">Toutes les cartes</div><div class="mut sm">Pour une révision complète</div></a>
     </div>
-    <section class="card"><h3>Examens blancs</h3>${ex.length ? `<div class="tw"><table><thead><tr><th>Date</th><th>QCM</th><th>Définitions</th><th>Casus</th><th>Note</th></tr></thead><tbody>${ex.map(e => `<tr><td>${dshort(e.d)}</td><td>${e.q[0]}/${e.q[1]}</td><td>${e.df[0]}/${e.df[1]}</td><td>${e.c[0]}/${e.c[1]}</td><td><strong>${e.note}/20</strong></td></tr>`).join('')}</tbody></table></div>` : '<p class="mut">Aucun examen blanc pour le moment.</p>'}</section>`);
+    <section class="card"><h3>Examens blancs</h3>${ex.length ? `<div class="tw"><table><thead><tr><th>Date</th><th>QCM</th><th>Définitions</th><th>Casus</th><th>Note</th></tr></thead><tbody>${ex.map(e => `<tr><td>${dshort(e.d)}${e.sim ? ' <span class="chip">simulation</span>' : ''}</td><td>${e.q[0]}/${e.q[1]}</td><td>${e.df[0]}/${e.df[1]}</td><td>${e.c[0]}/${e.c[1]}</td><td><strong>${String(e.note).replace('.', ',')}/20</strong></td></tr>`).join('')}</tbody></table></div>` : '<p class="mut">Aucun examen blanc pour le moment.</p>'}</section>`);
 }
 
 /* ---------- examen blanc ---------- */
@@ -459,18 +459,20 @@ function examSetup() {
   }
   if (S.exam && S.exam.done) return go('exam/result', true);
   const nq = Math.min(10, allQcm().length), nd = Math.min(4, allLex().length), nc = Math.min(2, allCasus().length);
+  const M12 = MOD(12), sim = !!(M12 && M12.ready && M12.qcm.length && M12.casus.length);
   view(`<a class="back" href="#/train">‹ Entraînement</a><h1>Examen blanc</h1>
     <p class="lead">Une épreuve tirée au hasard parmi les ${plural(READY().length, 'module disponible', 'modules disponibles')}, à composer d'une traite, codes en main, Code judiciaire fermé.</p>
     <div class="card"><ol class="exparts"><li><strong>${nq} questions de QCM</strong> <span class="mut">(1 point chacune)</span></li><li><strong>${nd} définitions</strong> <span class="mut">(2 points chacune)</span></li><li><strong>${nc} casus</strong> <span class="mut">(6 points chacun, selon la grille QUI – QUOI – RÈGLE – COMBIEN – QUAND – COMMENT)</span></li></ol>
     <p class="mut">À la remise de la copie, le QCM est corrigé automatiquement ; vous notez vous-même définitions et casus, corrigé sous les yeux.</p>
     <div class="kick">Durée</div><div class="row">${[60, 90, 120].map(d => `<button class="btn ${d === 90 ? 'pri' : ''}" data-a="exstart" data-dur="${d}">${d} minutes</button>`).join('')}</div></div>
-    <p class="mut sm">La simulation complète du module 12 viendra s'ajouter le 8 décembre.</p>`);
+    ${sim ? `<div class="card"><div class="kick">Simulation complète</div><h3>Simulation du module 12</h3><p>L'épreuve du module 12 telle que son énoncé la présente : ${plural(M12.qcm.length, 'question', 'questions')} de QCM, ${plural(M12.lex.length, 'définition', 'définitions')} et ${plural(M12.casus.length, 'dossier', 'dossiers')}, dont un conseil écrit, en 150 minutes. Barème de 40 points, ramené sur 20 ; la copie est remise d'elle-même à l'échéance.</p><button class="btn pri" data-a="exsim">Commencer la simulation</button></div>` : ''}`);
 }
-function examStart(dur) {
-  const qs = shuffle(allQcm()).slice(0, 10).map(q => ({ id: q.id, o: shuffle(q.c.map((_, i) => i)) }));
-  const defs = shuffle(allLex()).slice(0, 4).map(l => l.id);
-  const cas = shuffle(allCasus()).slice(0, 2).map(c => c.id);
-  S.exam = { start: Date.now(), dur: dur * 60, qs, qa: {}, defs, da: {}, cas, ca: {}, done: false, g: {} };
+function examStart(dur, sim) {
+  const M = sim ? MOD(12) : null;
+  const qs = M ? M.qcm.map(q => ({ id: q.id, o: q.c.map((_, i) => i) })) : shuffle(allQcm()).slice(0, 10).map(q => ({ id: q.id, o: shuffle(q.c.map((_, i) => i)) }));
+  const defs = M ? M.lex.map(l => l.id) : shuffle(allLex()).slice(0, 4).map(l => l.id);
+  const cas = M ? M.casus.map(c => c.id) : shuffle(allCasus()).slice(0, 2).map(c => c.id);
+  S.exam = { start: Date.now(), dur: dur * 60, qs, qa: {}, defs, da: {}, cas, ca: {}, done: false, g: {}, sim: !!M };
   save(); go('exam/run');
 }
 function examLeft() { return S.exam.dur - (Date.now() - S.exam.start) / 1000; }
@@ -481,7 +483,7 @@ function examRun() {
   if (examLeft() <= 0) return examSubmit(true);
   const qs = E.qs.map(x => [x, qById(x.id)]).filter(x => x[1]);
   view(`<div class="exbar"><span>${icon('clock')}<strong id="extm">${clock(examLeft())}</strong></span><button class="btn pri" data-a="exsubmit">Remettre ma copie</button></div>
-    <h1>Examen blanc</h1>
+    <h1>${E.sim ? 'Simulation du module 12' : 'Examen blanc'}</h1>
     <section class="card"><h2>Partie I · QCM</h2>${qs.map(([x, q], i) => `<div class="exq"><div class="qtext"><span class="mut">${i + 1}.</span> ${q.q}</div><div class="choices">${x.o.map((ci, k) => `<button class="choice ${E.qa[q.id] === ci ? 'sel' : ''}" data-a="expick" data-q="${q.id}" data-c="${ci}"><span class="cl">${'ABCDEF'[k]}</span><span class="ct">${q.c[ci]}</span></button>`).join('')}</div></div>`).join('')}</section>
     <section class="card"><h2>Partie II · Définitions</h2>${E.defs.map(id => lexById(id)).filter(Boolean).map((l, i) => `<div class="exd"><label class="lbl" for="d-${l.id}">${i + 1}. Définissez : « ${esc(l.f)} »</label><textarea id="d-${l.id}" rows="4" data-ex="da" data-id="${l.id}" placeholder="Catégorie, trait distinctif, base légale, exemple, enjeu">${esc(E.da[l.id] || '')}</textarea></div>`).join('')}</section>
     <section class="card"><h2>Partie III · Casus</h2>${E.cas.map(id => casById(id)).filter(Boolean).map((c, i) => `<div class="exc"><div class="kick">Casus ${i + 1}</div><div class="dossier prose">${c.enonce}</div><textarea rows="12" data-ex="ca" data-id="${c.id}" placeholder="Votre consultation">${esc(E.ca[c.id] || '')}</textarea></div>`).join('')}</section>
@@ -495,7 +497,9 @@ function examRun() {
 }
 function examSubmit(auto) {
   if (!S.exam || S.exam.done) return;
-  S.exam.done = true; S.exam.end = Math.min(Date.now(), S.exam.start + S.exam.dur * 1000); save();
+  S.exam.done = true; S.exam.end = Math.min(Date.now(), S.exam.start + S.exam.dur * 1000);
+  S.exam.qs.forEach(x => { const q = qById(x.id); if (!q) return; if (S.exam.qa[x.id] === q.a) delete S.wrong[x.id]; else S.wrong[x.id] = 1; });
+  save();
   stopTimers(); closeModal();
   if (auto) toast('Temps écoulé : la copie a été remise.');
   go('exam/result');
@@ -515,7 +519,7 @@ function examResult() {
   if (!E.done) return go('exam/run', true);
   const sc = examScore(E);
   const qs = E.qs.map(x => [x, qById(x.id)]).filter(x => x[1]);
-  view(`<a class="back" href="#/train">‹ Entraînement</a><h1>Correction</h1>
+  view(`<a class="back" href="#/train">‹ Entraînement</a><h1>${E.sim ? 'Correction de la simulation' : 'Correction'}</h1>
     <div class="card result" id="exsum">${examSumHtml(sc, E)}</div>
     <section class="card"><h2>Partie I · QCM <span class="mut sm">${sc.q[0]}/${sc.q[1]}</span></h2>${qs.map(([x, q], i) => {
       const a = E.qa[q.id], ok = a === q.a;
@@ -619,6 +623,7 @@ const ACT = {
     $$('.ev-b').forEach(b => b.classList.toggle('on', b === el)); toast('Auto-évaluation enregistrée.');
   },
   exstart: el => examStart(+el.dataset.dur),
+  exsim: () => examStart(150, true),
   exabandon: () => confirmBox("Abandonner l'examen en cours ? Vos réponses seront perdues.", 'Abandonner', () => { S.exam = null; save(); closeModal(); router(); }),
   expick: el => {
     const q = el.dataset.q, c = +el.dataset.c;
@@ -640,7 +645,7 @@ const ACT = {
   },
   exsave: () => {
     const E = S.exam, sc = examScore(E);
-    S.exams.push({ d: today(), dur: Math.round(E.dur / 60), q: sc.q, df: sc.df, c: sc.c, note: sc.note });
+    S.exams.push({ d: today(), dur: Math.round(E.dur / 60), q: sc.q, df: sc.df, c: sc.c, note: sc.note, sim: !!E.sim });
     S.exam = null; save(); toast(`Note enregistrée : ${String(sc.note).replace('.', ',')}/20.`); go('train');
   },
   exdiscard: () => confirmBox("Terminer sans enregistrer la note ?", 'Terminer', () => { S.exam = null; save(); closeModal(); go('train'); }),
