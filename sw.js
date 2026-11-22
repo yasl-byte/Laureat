@@ -1,6 +1,6 @@
 // Réseau d'abord : chaque module publié sur GitHub Pages arrive tout de suite.
 // Le cache ne sert que hors connexion. VERSION est recalculée par build.py à chaque publication.
-const VERSION = 'laureat-d58ea34818';
+const VERSION = 'laureat-d9274c16f4';
 const ASSETS = ['./', './index.html', './style.css', './data.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './eb-garamond-400.woff2', './eb-garamond-400-italic.woff2', './eb-garamond-600.woff2'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
